@@ -39,7 +39,8 @@ public final class ApmCommand implements BasicCommand {
 
     private static final List<String> SUBCOMMANDS = List.of(
             "gui", "list", "info", "search", "install", "update", "enable", "disable",
-            "reload", "config", "remove", "purge", "pending", "restart", "reloadconfig", "help");
+            "reload", "config", "remove", "purge", "pending", "restart", "restartscript",
+            "reloadconfig", "help");
 
     private final ApmPlugin plugin;
     private final ApmService service;
@@ -96,6 +97,7 @@ public final class ApmCommand implements BasicCommand {
             case "purge" -> remove(sender, rest, true);
             case "pending" -> pending(sender, rest);
             case "restart" -> restart(sender, rest);
+            case "restartscript" -> restartScript(sender, rest);
             case "reloadconfig" -> reloadConfig(sender);
             case "help", "?" -> help(sender);
             default -> {
@@ -132,6 +134,9 @@ public final class ApmCommand implements BasicCommand {
                     ? List.of("https://", "modrinth:")
                     : List.of();
             case "restart" -> args.length == 2 ? List.of("--yes", "cancel", "0", "10", "30") : List.of();
+            case "restartscript" -> args.length == 2
+                    ? List.of("status", "create").stream().filter(o -> o.startsWith(partial)).toList()
+                    : List.of();
             default -> List.of();
         };
     }
@@ -492,29 +497,66 @@ public final class ApmCommand implements BasicCommand {
             }
         }
 
+        var scriptStatus = service.restartScripts().status();
+
         if (!hasFlag(args, "--yes") && !hasFlag(args, "-y")) {
             if (sender instanceof Player player) {
-                int finalSeconds = seconds;
-                menus.open(player, new de.raindancer.apm.gui.ConfirmMenu(menus,
-                        new MainMenu(service, menus),
-                        "Restart the server?",
-                        "Everyone online will be disconnected.",
-                        "The server only comes back up if it was started",
-                        "through a restart wrapper script.",
-                        confirming -> {
-                            service.restarts().start(finalSeconds,
-                                    "requested by " + confirming.getName());
-                            confirming.closeInventory();
-                        }));
+                // The restart screen states whether this would really restart and offers to fix it.
+                menus.open(player, new de.raindancer.apm.gui.RestartMenu(
+                        service, menus, new MainMenu(service, menus)));
                 return;
             }
             sender.sendMessage(Msg.warn("This disconnects every player. Re-run with --yes to confirm."));
+            if (!scriptStatus.willRestart()) {
+                sender.sendMessage(Msg.error("<detail>", Msg.arg("detail", scriptStatus.detail())));
+                sender.sendMessage(Msg.info("Run /apm restartscript first to have APM write one from "
+                        + "this server's own launch command."));
+            }
             return;
         }
 
+        // Confirmed, but still worth stating plainly what is about to happen.
+        if (!scriptStatus.willRestart()) {
+            sender.sendMessage(Msg.error("<detail> Continuing anyway because --yes was given.",
+                    Msg.arg("detail", scriptStatus.detail())));
+        }
         sender.sendMessage(service.restarts().start(seconds, "requested by " + sender.getName())
                 ? Msg.success("Restart scheduled.")
                 : Msg.warn("A restart is already counting down. Use /apm restart cancel to stop it."));
+    }
+
+    /**
+     * Reports whether a restart would really restart, and writes the missing script on request.
+     *
+     * <p>Exists because {@code Server#restart()} shuts the server down when the configured start
+     * script is absent — a footgun an admin should not have to discover the hard way.
+     */
+    private void restartScript(CommandSender sender, String[] args) {
+        var status = service.restartScripts().status();
+
+        if (args.length == 0 || args[0].equalsIgnoreCase("status")) {
+            sender.sendMessage(status.willRestart()
+                    ? Msg.success("<detail>", Msg.arg("detail", status.detail()))
+                    : Msg.error("<detail>", Msg.arg("detail", status.detail())));
+            if (!status.willRestart()) {
+                sender.sendMessage(status.canGenerate()
+                        ? Msg.info("Run /apm restartscript create to have APM write one that "
+                                + "reproduces this server's launch command.")
+                        : Msg.warn("This JVM does not expose its own command line, so APM cannot "
+                                + "generate the script — write it by hand."));
+            }
+            return;
+        }
+
+        if (!args[0].equalsIgnoreCase("create")) {
+            sender.sendMessage(Msg.error("Usage: /apm restartscript [status|create]"));
+            return;
+        }
+
+        var result = service.restartScripts().generate(true);
+        sender.sendMessage(result.success()
+                ? Msg.success("<detail>", Msg.arg("detail", result.message()))
+                : Msg.error("<detail>", Msg.arg("detail", result.message())));
     }
 
     private void reloadConfig(CommandSender sender) {
@@ -545,6 +587,8 @@ public final class ApmCommand implements BasicCommand {
         helpLine(sender, "/apm purge <plugin> --yes", "delete its jar and all its data");
         helpLine(sender, "/apm pending [apply]", "review deferred file operations");
         helpLine(sender, "/apm restart [seconds|cancel] --yes", "restart with a countdown");
+        helpLine(sender, "/apm restartscript [status|create]",
+                "check, or create, the script Paper needs to actually restart");
         helpLine(sender, "/apm reloadconfig", "re-read APM's own config.yml");
         sender.sendMessage(Msg.raw(""));
     }

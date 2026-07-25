@@ -17,6 +17,7 @@ import de.raindancer.apm.core.InstallService;
 import de.raindancer.apm.core.PendingActions;
 import de.raindancer.apm.core.PluginLifecycleService;
 import de.raindancer.apm.core.PluginRegistry;
+import de.raindancer.apm.core.RestartScriptService;
 import de.raindancer.apm.core.RestartService;
 import de.raindancer.apm.gui.MenuManager;
 import de.raindancer.apm.util.Banner;
@@ -86,11 +87,14 @@ public final class ApmPlugin extends JavaPlugin {
                 new PluginLifecycleService(getServer(), registry, pending, getSLF4JLogger());
         InstallService installs = new InstallService(
                 registry, lifecycle, database, pending, cacheFolder, getSLF4JLogger());
-        this.restarts = new RestartService(this, config.restartCountdownSeconds());
         ConfigEditService configs = new ConfigEditService(registry::pluginsFolder, getSLF4JLogger());
+        // The server directory is the plugins folder's parent — Bukkit exposes no direct accessor.
+        RestartScriptService restartScripts = new RestartScriptService(
+                registry.pluginsFolder().getParent(), getSLF4JLogger());
+        this.restarts = new RestartService(this, config.restartCountdownSeconds(), restartScripts);
 
-        ApmService service = new ApmService(
-                this, registry, lifecycle, installs, database, pending, restarts, configs);
+        ApmService service = new ApmService(this, registry, lifecycle, installs, database,
+                pending, restarts, configs, restartScripts);
 
         this.menus = new MenuManager(this);
         menus.register();

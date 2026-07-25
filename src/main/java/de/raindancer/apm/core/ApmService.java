@@ -49,6 +49,7 @@ public final class ApmService {
     private final PendingActions pending;
     private final RestartService restarts;
     private final ConfigEditService configs;
+    private final RestartScriptService restartScripts;
 
     public ApmService(ApmPlugin plugin,
                       PluginRegistry registry,
@@ -57,7 +58,8 @@ public final class ApmService {
                       InstallDatabase database,
                       PendingActions pending,
                       RestartService restarts,
-                      ConfigEditService configs) {
+                      ConfigEditService configs,
+                      RestartScriptService restartScripts) {
         this.plugin = plugin;
         this.registry = registry;
         this.lifecycle = lifecycle;
@@ -66,6 +68,12 @@ public final class ApmService {
         this.pending = pending;
         this.restarts = restarts;
         this.configs = configs;
+        this.restartScripts = restartScripts;
+    }
+
+    /** Tells whether a restart would really restart, and can write a script so that it does. */
+    public RestartScriptService restartScripts() {
+        return restartScripts;
     }
 
     /** Editor for other plugins' YAML configuration files. */

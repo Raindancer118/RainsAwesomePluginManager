@@ -90,34 +90,26 @@ public final class MainMenu extends ApmMenu {
                 .amount(Math.max(1, pendingCount))
                 .build(), (player, click) -> menus.open(player, new PendingMenu(service, menus, this)));
 
+        var scriptStatus = service.restarts().isCountingDown()
+                ? null
+                : service.restartScripts().status();
         set(31, Icon.of(Material.REDSTONE_TORCH)
                 .title("<" + Msg.WARN + "><bold>Restart the server</bold>")
                 .lore(service.restarts().isCountingDown()
                         ? "A restart is already counting down."
-                        : "Needed to activate newly installed")
+                        : "Needed to activate newly installed or")
                 .lore(service.restarts().isCountingDown()
-                        ? "Click to cancel it."
-                        : "or updated plugins.")
+                        ? ""
+                        : "updated plugins.")
+                .lore(scriptStatus == null || scriptStatus.willRestart()
+                        ? ""
+                        : "<" + Msg.BAD + ">No restart script — it would shut down!")
                 .blank()
-                .danger(service.restarts().isCountingDown()
+                .action(service.restarts().isCountingDown()
                         ? "Cancel the countdown"
-                        : "Start a countdown and restart")
-                .build(), (player, click) -> {
-                    if (service.restarts().isCountingDown()) {
-                        service.restarts().cancel();
-                        refresh();
-                        return;
-                    }
-                    menus.open(player, new ConfirmMenu(menus, this,
-                            "Restart the server?",
-                            "Everyone online will be disconnected.",
-                            "The server only comes back up if it was",
-                            "started through a restart wrapper script.",
-                            confirmingPlayer -> {
-                                service.restarts().start(-1, "requested by " + confirmingPlayer.getName());
-                                confirmingPlayer.closeInventory();
-                            }));
-                });
+                        : "Open the restart screen")
+                .build(), (player, click) -> menus.open(player,
+                        new RestartMenu(service, menus, this)));
 
         set(33, Icon.of(Material.KNOWLEDGE_BOOK)
                 .title("<" + Msg.ACCENT + "><bold>Edit plugin configs</bold>")

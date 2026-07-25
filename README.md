@@ -58,6 +58,7 @@ configure before it is safe.
 | `/apm purge <plugin> --yes` | delete its jar and all its data |
 | `/apm pending [apply]` | review deferred file operations |
 | `/apm restart [seconds\|cancel] --yes` | restart with a countdown |
+| `/apm restartscript [status\|create]` | check, or create, what Paper needs to actually restart |
 | `/apm reloadconfig` | re-read APM's own `config.yml` |
 
 Destructive subcommands need `--yes` from the console, because a console cannot be shown a
@@ -76,8 +77,13 @@ Plugin management on a running JVM has hard limits. APM states them instead of h
 - **Hot-loading freezes the server briefly.** Loading and enabling a plugin is main-thread work. A
   heavyweight plugin can block for seconds and trip Paper's watchdog — expected, not a crash. Turn
   `install.attempt-hot-load` off on a busy server.
-- **`/apm restart` only really restarts** if your server was started through a restart wrapper
-  script. Otherwise it is a shutdown.
+- **Restarting needs a supervisor, and APM tells you whether you have one.** `Server#restart()`
+  does not relaunch the JVM; it execs `settings.restart-script` as a child of the dying process,
+  which in a `screen` or `tmux` session is usually killed along with the session — the server then
+  stays down. Run `/apm restartscript` to see where you stand, and `/apm restartscript create` to
+  have APM write a supervisor script that reproduces your exact launch command and relaunches the
+  server itself. Under a supervisor, APM stops the server and lets the supervisor bring it back
+  instead of using Paper's exec. `/stop` still means stop.
 - **A changed jar needs a restart.** `reload` re-runs a plugin's startup logic; it does not load new
   code.
 

@@ -51,6 +51,22 @@ restart:
   # Set to 0 to restart immediately.
   countdown-seconds: 10
 
+  # How a restart actually happens is not configurable, because it is not a preference — it depends
+  # on how your server is run, and APM detects it:
+  #
+  #   * Supervised (recommended). Something outside the JVM starts the server again when it exits:
+  #     APM's own generated script (/apm restartscript create), a systemd unit with Restart=, or a
+  #     Pterodactyl/Wings container. APM then simply stops the server and lets the supervisor bring
+  #     it back. Reliable.
+  #     - With systemd, set APM_SUPERVISED=1 in the unit's Environment= so APM knows.
+  #
+  #   * Paper's restart-script. Without a supervisor, APM falls back to Server#restart(), which
+  #     execs settings.restart-script from spigot.yml as a CHILD of the dying JVM. In a screen or
+  #     tmux session that child usually gets killed with the session, and the server stays down.
+  #     If the script is missing entirely, Paper just shuts down.
+  #
+  # Run /apm restartscript to see which case you are in.
+
 modrinth:
   # Which loader to ask Modrinth for. "paper" is right for a Paper server; "folia", "spigot" and
   # "bukkit" also work if you specifically want builds tagged for those.
