@@ -1,0 +1,15 @@
+name: APM
+version: '${version}'
+main: de.raindancer.apm.ApmPlugin
+api-version: '${apiVersion}'
+description: Rain's Awesome Plugin Manager — apt for your Paper server. Install, update, enable, disable and configure plugins in-game.
+author: Raindancer118
+website: https://github.com/Raindancer118
+# Folia is deliberately NOT declared: APM manipulates the global plugin manager and the plugins
+# folder, which are server-wide state with no region to schedule against. Claiming Folia support
+# without having audited that would be worse than not supporting it.
+folia-supported: false
+permissions:
+  apm.admin:
+    description: Full access to APM — installing, removing and configuring plugins.
+    default: op

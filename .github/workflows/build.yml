@@ -1,0 +1,80 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  # A newer push to the same ref makes an in-flight run pointless, and two runs
+  # racing to replace the rolling "latest" release would be a coin flip.
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java 25: paper-api 26.x targets class file version 69, so an older JDK
+      # cannot even read the API jar.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build and test
+        run: ./gradlew build --no-daemon
+
+      # Runs even on failure: a red build is exactly when the report matters.
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Locate jar
+        id: jar
+        run: echo "path=$(ls build/libs/apm-*.jar | head -n1)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apm
+          path: ${{ steps.jar.outputs.path }}
+
+      # Every push to main republishes a rolling "latest" release, so there is
+      # always one stable download link for a server admin — no need to hunt
+      # through commits for day-to-day updates.
+      - name: Publish rolling "latest" release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest "${{ steps.jar.outputs.path }}" \
+            --repo "${{ github.repository }}" \
+            --title "Latest build" \
+            --notes "Automatic build from main @ ${{ github.sha }}. Drop the jar into your server's plugins/ folder and restart." \
+            --prerelease
+
+      # A pushed vX.Y.Z tag additionally cuts a proper, permanent release.
+      - name: Publish tagged release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" "${{ steps.jar.outputs.path }}" \
+            --repo "${{ github.repository }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes

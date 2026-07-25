@@ -1,0 +1,57 @@
+# Rain's Awesome Plugin Manager
+#
+# Everything here can be reloaded at runtime with /apm reloadconfig or from the main menu.
+
+security:
+  # Refuse plain HTTP downloads. A plugin jar fetched over HTTP can be swapped in transit by
+  # anything between your server and the source, and it is executed with full server privileges.
+  # Turn this off only for a source on your own LAN.
+  require-https: true
+
+  # Hosts APM is allowed to download from. An empty list means "any host", which is the default:
+  # only operators can run /apm install in the first place.
+  # Subdomains are matched, so "modrinth.com" also allows "cdn.modrinth.com".
+  # Example of a locked-down setup:
+  #   allowed-hosts:
+  #     - modrinth.com
+  #     - github.com
+  #     - githubusercontent.com
+  allowed-hosts: []
+
+  # Hard cap per download, in megabytes. Enforced while streaming, not just against the
+  # Content-Length header a remote server claims.
+  max-download-size-mb: 200
+
+download:
+  connect-timeout-seconds: 15
+  read-timeout-seconds: 120
+
+  # Keep verified downloads in plugins/APM/cache/ after installing them. Useful if you want to
+  # archive exactly what was deployed; costs disk space.
+  keep-cache: false
+
+install:
+  # Install plugins whose declared api-version is newer than this server.
+  # Leave this off: such a plugin will usually fail to load, and when it does load it tends to
+  # break in ways that are hard to trace back. APM asks for confirmation per install instead.
+  allow-incompatible: false
+
+  # Try to load a newly installed plugin without a restart. Paper makes no promise that this
+  # works; when it does not, APM says so and the plugin comes up on the next start.
+  # Updates never hot-load — the old classes are still resident.
+  #
+  # Be aware of the cost: loading and enabling a plugin is main-thread work, so the server stops
+  # ticking for as long as the plugin takes to start. A heavyweight plugin opening a database can
+  # take several seconds, and Paper's watchdog will print a thread dump about it — expected here,
+  # not a crash. On a busy production server, turn this off and install during a planned restart.
+  attempt-hot-load: true
+
+restart:
+  # Seconds between "/apm restart" and the actual restart, so players get a warning.
+  # Set to 0 to restart immediately.
+  countdown-seconds: 10
+
+modrinth:
+  # Which loader to ask Modrinth for. "paper" is right for a Paper server; "folia", "spigot" and
+  # "bukkit" also work if you specifically want builds tagged for those.
+  loader: paper

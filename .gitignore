@@ -1,0 +1,8 @@
+build/
+.gradle/
+Project.md
+*.class
+.idea/
+*.iml
+.vscode/
+The Plan.md
