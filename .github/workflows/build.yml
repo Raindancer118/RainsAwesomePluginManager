@@ -31,6 +31,31 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # Read straight out of build.gradle.kts rather than asking Gradle to evaluate it: cheaper,
+      # and every other step here only needs the string, not a live project model.
+      - name: Read the project version
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION="$(sed -n 's/^version = "\(.*\)"$/\1/p' build.gradle.kts)"
+          [ -n "$VERSION" ] || { echo "::error::could not read version from build.gradle.kts"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building APM $VERSION"
+
+      # Whether this version already has a tag on the remote — the switch that lets a plain
+      # version bump on main publish on its own, instead of silently building a jar nobody can
+      # install as a fixed version until somebody remembers to push a matching tag by hand.
+      - name: Check whether vVERSION is already tagged
+        id: tagcheck
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/v${{ steps.version.outputs.version }}" \
+              >/dev/null 2>&1; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and test
         run: ./gradlew build --no-daemon
 
@@ -68,13 +93,29 @@ jobs:
             --notes "Automatic build from main @ ${{ github.sha }}. Drop the jar into your server's plugins/ folder and restart." \
             --prerelease
 
-      # A pushed vX.Y.Z tag additionally cuts a proper, permanent release.
+      # A pushed vX.Y.Z tag cuts a proper, permanent release — or, when a plain push to main bumps
+      # build.gradle.kts to a version nobody has tagged yet, this cuts and tags it on its own.
       - name: Publish tagged release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.tagcheck.outputs.new == 'true')
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.version.outputs.version) }}
         run: |
-          gh release create "${{ github.ref_name }}" "${{ steps.jar.outputs.path }}" \
+          gh release create "$TAG" "${{ steps.jar.outputs.path }}" \
             --repo "${{ github.repository }}" \
-            --title "${{ github.ref_name }}" \
+            --title "$TAG" \
             --generate-notes
+
+      # Tagged only now that the release above has actually succeeded — not before it, so a failed
+      # release leaves no tag behind and gets retried on the next push instead of being silently
+      # marked done. A tag pushed here with the default GITHUB_TOKEN does not retrigger this
+      # workflow (GitHub's own recursion guard), which is why the release runs in *this* job rather
+      # than waiting for that retrigger.
+      - name: Tag this version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.tagcheck.outputs.new == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
