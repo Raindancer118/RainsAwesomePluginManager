@@ -3,13 +3,13 @@ plugins {
 }
 
 group = "de.raindancer"
-version = "1.0.0"
+version = "1.1.0"
 
-val paperApiVersion = "26.1.2.build.74-stable"
+val paperApiVersion = "26.3.build.169-beta"
 
 // Minimum server version APM declares in paper-plugin.yml. Paper expects a Minecraft
 // version here (major.minor), not the full artifact coordinate.
-val paperApiDeclaration = "26.1"
+val paperApiDeclaration = "26.3"
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(25)
